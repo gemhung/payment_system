@@ -47,13 +47,13 @@ impl<T: std::io::Read> Iterator for IntoIter<T> {
                         Some("deposit"),
                         Some(Ok(client_id)),
                         Some(Ok(transaction_id)),
-                        Some(Ok((amount))),
+                        Some(Ok(amount)),
                     ) => Some(Ok(Transaction::Deposit(client_id, transaction_id, amount))),
                     (
                         Some("withdrawal"),
                         Some(Ok(client_id)),
                         Some(Ok(transaction_id)),
-                        Some(Ok((amount))),
+                        Some(Ok(amount)),
                     ) => Some(Ok(Transaction::Withdrawal(
                         client_id,
                         transaction_id,

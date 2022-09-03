@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 mod csv;
 mod payment;
 
@@ -8,7 +6,10 @@ use tracing::*;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_line_number(true)
+        .with_file(true)
+        .init();
 
     // Get arguments
     let args = std::env::args().collect::<Vec<_>>();
@@ -37,8 +38,14 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Init payment engine
     let mut engine = PaymentEngine::new();
+    // Payment services number is same as available_parallelism
+    let sz = std::thread::available_parallelism().unwrap_or_else(|err| {
+        error!(?err);
+        std::num::NonZeroUsize::new(10).expect("should be positive number")
+    });
+    debug!(?sz);
     // Start engine to run multiple identical payment services concurrently
-    engine.start(std::num::NonZeroU8::new(10).expect("invalid size"), tx);
+    engine.start(sz, tx);
 
     // Feed all transactions to engine
     loop {
@@ -53,14 +60,16 @@ async fn main() -> Result<(), anyhow::Error> {
             }
             // Happy path
             Some(Ok(transaction)) => {
-                engine.execute(transaction);
+                if let Err(err) = engine.execute(transaction) {
+                    error!(?err);
+                }
             }
         }
     }
 
     // Graceful shutdown
-    engine.shutdown().await;
-    dead_letter_wait.await;
+    engine.shutdown().await?;
+    dead_letter_wait.await?;
 
     Ok(())
 }

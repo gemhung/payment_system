@@ -22,9 +22,6 @@ pub enum PaymentError {
     #[error("Account is locked after tx = {1}, txn={0:?}")]
     Locked(Transaction, TransactionID), //
 
-    #[error("No endpoint to send({0:?})")]
-    NoEndpointToSend(Transaction),
-
     #[error("Unknown error")]
     Unknown(Transaction, Option<TransactionInner>),
 }

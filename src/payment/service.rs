@@ -14,16 +14,16 @@ pub(crate) struct PaymentService {
     pub history: Vec<Transaction>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisputeStatus {
     Normal,
     Disputed,
-    Resolved,
     ChargeBacked,
 }
 
 #[derive(Debug, Clone)]
 pub struct TransactionInner {
+    #[allow(dead_code)]
     client: ClientID,
     tx: TransactionID,
     amount: Amount, // we defined that positive amount means 'deposit', and negative amount means 'withdrawal'
@@ -46,9 +46,7 @@ impl PaymentService {
 
         while let Some(txn) = receiver.recv().await {
             // make new asset for new client
-            let mut asset = asset_book
-                .entry(txn.client_id())
-                .or_insert_with(|| Asset::new());
+            let mut asset = asset_book.entry(txn.client_id()).or_insert_with(Asset::new);
 
             // The instruction seemed not mention what to do for the following transactions once it's locked
             // Here I choose to simply skip transaction and publish an error
@@ -78,14 +76,14 @@ impl PaymentService {
                 }
                 // Case 2. Error for deposit if found duplicate transaction id
                 (txn @ Transaction::Deposit(..), Some(_)) => {
-                    dead_letter_queue.send(PaymentError::DuplicateTransaction(txn));
+                    let _ = dead_letter_queue.send(PaymentError::DuplicateTransaction(txn));
                 }
 
                 // Case 3. Withdraw
                 (Transaction::Withdrawal(client, tx, amount), None) => {
                     // check if insuffiecient balance
                     if asset.available - amount < 0.0 {
-                        dead_letter_queue.send(PaymentError::InsuffiecientBalance(
+                        let _ = dead_letter_queue.send(PaymentError::InsuffiecientBalance(
                             Transaction::Withdrawal(client, tx, amount),
                             asset.available,
                         ));
@@ -108,7 +106,7 @@ impl PaymentService {
 
                 // Case 4. Error for withdrawal if found duplicated transaction id
                 (txn @ Transaction::Withdrawal(..), Some(_)) => {
-                    dead_letter_queue.send(PaymentError::DuplicateTransaction(txn));
+                    let _ = dead_letter_queue.send(PaymentError::DuplicateTransaction(txn));
                 }
 
                 // Case 5. Dispute from normal status
@@ -122,13 +120,13 @@ impl PaymentService {
                 ) => {
                     // Error if inner is a withdrawal transaction
                     if amount < &0.0 {
-                        dead_letter_queue
+                        let _ = dead_letter_queue
                             .send(PaymentError::InsuffiecientBalance(txn, asset.available));
                         continue;
                     }
                     // Error if available fund is smaller than std::abs(amount)
                     if asset.available - amount < 0.0 {
-                        dead_letter_queue
+                        let _ = dead_letter_queue
                             .send(PaymentError::InsuffiecientBalance(txn, asset.available));
                         continue;
                     }
@@ -178,17 +176,18 @@ impl PaymentService {
                     txn @ (Transaction::ChargeBack { .. } | Transaction::Resolve { .. }),
                     Some(TransactionInner { status, .. }),
                 ) => {
-                    dead_letter_queue.send(PaymentError::InvalidDisputeStatus(txn, *status));
+                    let _ =
+                        dead_letter_queue.send(PaymentError::InvalidDisputeStatus(txn, *status));
                 }
 
                 // Case 8. Error for no such tx
                 (txn, None) => {
-                    dead_letter_queue.send(PaymentError::NoSuchTransactionID(txn));
+                    let _ = dead_letter_queue.send(PaymentError::NoSuchTransactionID(txn));
                 }
 
-                // Case 9. Error for the remain combinations
-                (txn @ _, txn_inner @ _) => {
-                    dead_letter_queue.send(PaymentError::Unknown(txn, txn_inner.cloned()));
+                // Case 9. Error for the remaining combinations
+                (txn, txn_inner) => {
+                    let _ = dead_letter_queue.send(PaymentError::Unknown(txn, txn_inner.cloned()));
                 }
             }
         }

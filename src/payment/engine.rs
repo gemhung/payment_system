@@ -1,7 +1,5 @@
-use super::asset::Asset;
 use super::asset::AssetBook;
 use super::error::PaymentError;
-use super::service;
 use super::service::PaymentService;
 use tokio::sync::mpsc;
 use tracing::*;
@@ -28,7 +26,7 @@ impl PaymentEngine {
     // start the enginge with a number of services
     pub fn start(
         &mut self,
-        size: std::num::NonZeroU8,
+        size: std::num::NonZeroUsize,
         dead_letter_queue: mpsc::UnboundedSender<PaymentError>,
     ) {
         let sz = size.get() as usize;
@@ -59,10 +57,7 @@ impl PaymentEngine {
                             let available = format!("{:.4}", asset.available);
                             let hold = format!("{:.4}", asset.hold);
                             let locked = asset.is_locked.is_some();
-                            println!(
-                                "{},{},{},{},{}",
-                                client_id, total, available, hold, locked
-                            );
+                            println!("{},{},{},{},{}", client_id, total, available, hold, locked);
                         })
                     }
 
@@ -81,19 +76,20 @@ impl PaymentEngine {
         }
 
         // simple dispatcher using hashing
-        let client_id = txn.client_id();
         self.endpoint[txn.client_id() as usize % self.endpoint.len()].send(txn)?;
 
         Ok(())
     }
 
-    pub async fn shutdown(mut self) {
+    pub async fn shutdown(self) -> Result<(), anyhow::Error> {
         if let Some(shutdown) = self.shutdown {
             // close each service by dropping corresponding endpoint
             drop(self.endpoint);
             // wait for all services to exit
-            shutdown.await;
+            shutdown.await?;
         }
+
+        Ok(())
     }
 }
 
