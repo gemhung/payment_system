@@ -1,6 +1,7 @@
 use super::asset::AssetBook;
 use super::error::PaymentError;
 use super::service::PaymentService;
+use futures::StreamExt;
 use tokio::sync::mpsc;
 use tracing::*;
 
@@ -37,7 +38,7 @@ impl PaymentEngine {
         for _ in 0..sz {
             let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
             let dead_que = dead_letter_queue.clone();
-            // update wait group
+            // spawn service and add handle to wait group
             wait_group.push(tokio::spawn(async move {
                 PaymentService::new().run(rx, dead_que).await
             }));
@@ -47,25 +48,42 @@ impl PaymentEngine {
 
         // Handle returned summary when services ended
         self.shutdown = Some(tokio::spawn(async move {
-            for wait in wait_group {
-                let summary = wait.await;
-                match summary {
-                    Ok(Ok(PaymentSummary { asset_book, .. })) => {
-                        asset_book.into_iter().for_each(|(client_id, asset)| {
-                            // As intructions required, we output a precision of up to four places past the decimal
-                            let total = format!("{:.4}", asset.total);
-                            let available = format!("{:.4}", asset.available);
-                            let hold = format!("{:.4}", asset.hold);
-                            let locked = asset.is_locked.is_some();
-                            println!("{},{},{},{},{}", client_id, total, available, hold, locked);
-                        })
-                    }
+            // wait until all services ended
+            let write_csv_header = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+            futures::stream::iter(wait_group)
+                .for_each_concurrent(None, |w| {
+                    let write_csv_header = write_csv_header.clone();
+                    async move {
+                        // when service ended, we have the summary
+                        let summary = w.await;
+                        // csv header
+                        if write_csv_header.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                            println!("client,available,held,total,locked");
+                        }
 
-                    err => {
-                        error!(?err);
+                        // Process and then print client's asset
+                        match summary {
+                            Ok(Ok(PaymentSummary { asset_book, .. })) => {
+                                asset_book.into_iter().for_each(|(client_id, asset)| {
+                                    // As intructions required, we output a precision of up to four places past the decimal
+                                    let total = format!("{:.4}", asset.total);
+                                    let available = format!("{:.4}", asset.available);
+                                    let hold = format!("{:.4}", asset.hold);
+                                    let locked = asset.is_locked.is_some();
+                                    println!(
+                                        "{},{},{},{},{}",
+                                        client_id, total, available, hold, locked
+                                    );
+                                })
+                            }
+
+                            err => {
+                                error!(?err);
+                            }
+                        };
                     }
-                }
-            }
+                })
+                .await;
         }));
     }
 
