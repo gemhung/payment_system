@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 
 #[derive(Default)]
 pub(crate) struct PaymentService {
-    running: std::collections::HashMap<TransactionID, TransactionInner>,
+    running: std::collections::HashMap<(ClientID, TransactionID), TransactionInner>,
     pub history: Vec<Transaction>,
 }
 
@@ -46,6 +46,7 @@ impl PaymentService {
 
         while let Some(txn) = receiver.recv().await {
             // make new asset for new client
+            let client_id = txn.client_id();
             let mut asset = asset_book.entry(txn.client_id()).or_insert_with(Asset::new);
 
             // The instruction seemed not mention what to do for the following transactions once it's locked
@@ -59,7 +60,7 @@ impl PaymentService {
             self.history.push(txn.clone());
 
             let tx = txn.tx();
-            match (txn, self.running.get_mut(&tx)) {
+            match (txn, self.running.get_mut(&(client_id, tx))) {
                 // Case 1. Deposit
                 (Transaction::Deposit(client, tx, amount), None) => {
                     let txn = TransactionInner {
@@ -69,7 +70,7 @@ impl PaymentService {
                         status: DisputeStatus::Normal,
                     };
 
-                    self.running.insert(tx, txn);
+                    self.running.insert((client_id, tx), txn);
 
                     asset.total += amount;
                     asset.available += amount;
@@ -98,7 +99,7 @@ impl PaymentService {
                         status: DisputeStatus::Normal,
                     };
 
-                    self.running.insert(tx, txn);
+                    self.running.insert((client_id, tx), txn);
 
                     asset.total -= amount;
                     asset.available -= amount;
