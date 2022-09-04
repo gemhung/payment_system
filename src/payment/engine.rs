@@ -147,3 +147,5 @@ pub struct PaymentSummary {
     pub asset_book: AssetBook,
     pub history: Vec<Transaction>,
 }
+
+mod test {}

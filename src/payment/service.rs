@@ -7,6 +7,7 @@ use super::engine::Transaction;
 use super::engine::TransactionID;
 use super::error::PaymentError;
 use tokio::sync::mpsc;
+use tracing::*;
 
 #[derive(Default)]
 pub(crate) struct PaymentService {
@@ -74,6 +75,7 @@ impl PaymentService {
 
                     asset.total += amount;
                     asset.available += amount;
+                    info!(?asset);
                 }
                 // Case 2. Error for deposit if found duplicate transaction id
                 (txn @ Transaction::Deposit(..), Some(_)) => {
@@ -84,7 +86,7 @@ impl PaymentService {
                 (Transaction::Withdrawal(client, tx, amount), None) => {
                     // check if insuffiecient balance
                     if asset.available - amount < 0.0 {
-                        let _ = dead_letter_queue.send(PaymentError::InsuffiecientBalance(
+                        let _ = dead_letter_queue.send(PaymentError::InsufficientBalance(
                             Transaction::Withdrawal(client, tx, amount),
                             asset.available,
                         ));
@@ -121,14 +123,13 @@ impl PaymentService {
                 ) => {
                     // Error if inner is a withdrawal transaction
                     if amount < &0.0 {
-                        let _ = dead_letter_queue
-                            .send(PaymentError::InsuffiecientBalance(txn, asset.available));
+                        let _ = dead_letter_queue.send(PaymentError::CanNotDisputeWithdrawal(txn));
                         continue;
                     }
                     // Error if available fund is smaller than std::abs(amount)
                     if asset.available - amount < 0.0 {
                         let _ = dead_letter_queue
-                            .send(PaymentError::InsuffiecientBalance(txn, asset.available));
+                            .send(PaymentError::InsufficientBalance(txn, asset.available));
                         continue;
                     }
                     // Happy path
@@ -172,9 +173,13 @@ impl PaymentService {
                     *st = DisputeStatus::ChargeBacked;
                 }
 
-                // Case 8. Error for Resolve | ChargeBack if any but disputed status
+                // Case 8.
+                // * Error for Resolving | ChargeBacking if any but disputed status
+                // * Error for Disputing any but normal status
                 (
-                    txn @ (Transaction::ChargeBack { .. } | Transaction::Resolve { .. }),
+                    txn @ (Transaction::Dispute { .. }
+                    | Transaction::ChargeBack { .. }
+                    | Transaction::Resolve { .. }),
                     Some(TransactionInner { status, .. }),
                 ) => {
                     let _ =
@@ -184,11 +189,6 @@ impl PaymentService {
                 // Case 8. Error for no such tx
                 (txn, None) => {
                     let _ = dead_letter_queue.send(PaymentError::NoSuchTransactionID(txn));
-                }
-
-                // Case 9. Error for the remaining combinations
-                (txn, txn_inner) => {
-                    let _ = dead_letter_queue.send(PaymentError::Unknown(txn, txn_inner.cloned()));
                 }
             }
         }
