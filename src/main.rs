@@ -28,10 +28,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Init error handling(dead_letter_queue)
     // dead_letter_queue is a special queue to handle all payment errors. Ex: we can alert or send an email
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (dead_letter_tx, mut dead_letter_rx) = tokio::sync::mpsc::unbounded_channel();
     let dead_letter_wait = tokio::spawn(async move {
-        while let Some(err) = rx.recv().await {
-            // For now , we simply print error with debug level cause the instruction didn't mention how to deal with error
+        while let Some(err) = dead_letter_rx.recv().await {
+            // For now , we simply print out error cause the instruction seems not to mention how to deal with error
             error!(?err);
         }
     });
@@ -45,7 +45,7 @@ async fn main() -> Result<(), anyhow::Error> {
     });
     debug!(?sz);
     // Start engine to run multiple identical payment services concurrently
-    engine.start(sz, tx);
+    engine.start(sz, dead_letter_tx);
 
     // Feed all transactions to engine
     loop {
