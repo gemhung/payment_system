@@ -72,7 +72,7 @@ impl PaymentEngine {
                                     let locked = asset.is_locked.is_some();
                                     println!(
                                         "{},{},{},{},{}",
-                                        client_id, total, available, hold, locked
+                                        client_id, available, hold, total, locked
                                     );
                                 })
                             }

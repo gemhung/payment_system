@@ -75,7 +75,7 @@ impl PaymentService {
 
                     asset.total += amount;
                     asset.available += amount;
-                    info!(?asset);
+                    debug!(?asset, "Deposit,");
                 }
                 // Case 2. Error for deposit if found duplicate transaction id
                 (txn @ Transaction::Deposit(..), Some(_)) => {
@@ -105,6 +105,7 @@ impl PaymentService {
 
                     asset.total -= amount;
                     asset.available -= amount;
+                    debug!(?asset, "Withdrawal, ");
                 }
 
                 // Case 4. Error for withdrawal if found duplicated transaction id
@@ -137,6 +138,7 @@ impl PaymentService {
                     asset.hold += amount;
                     // update status because it's disputed
                     *st = DisputeStatus::Disputed;
+                    debug!(?asset, "Dispute,");
                 }
 
                 // Case 6. Resolve from disputed status
@@ -152,6 +154,7 @@ impl PaymentService {
                     asset.hold -= *amount;
                     // update status because it's resolved and no loger disputed
                     *st = DisputeStatus::Normal;
+                    debug!(?asset, "Resolve,");
                 }
 
                 // Case 7. Chargeback from disputed status
@@ -171,6 +174,7 @@ impl PaymentService {
 
                     // update status since it's charged back
                     *st = DisputeStatus::ChargeBacked;
+                    debug!(?asset, "Chargeback, ");
                 }
 
                 // Case 8.
