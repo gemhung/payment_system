@@ -26,7 +26,7 @@ pub struct TransactionInner {
     #[allow(dead_code)]
     client: ClientID,
     tx: TransactionID,
-    amount: Amount, // we defined that positive amount means 'deposit', and negative amount means 'withdrawal'
+    amount: Amount, // We defined that positive amount means 'deposit', and negative amount means 'withdrawal'
     status: DisputeStatus,
 }
 
@@ -45,9 +45,11 @@ impl PaymentService {
         let mut asset_book = AssetBook::new();
 
         while let Some(txn) = receiver.recv().await {
-            // make new asset for new client
+            // Make new asset for new client
             let client_id = txn.client_id();
-            let asset = asset_book.entry(txn.client_id()).or_default();
+            let asset = asset_book
+                .entry(txn.client_id())
+                .or_insert_with(crate::payment::asset::Asset::new);
 
             // The instruction seemed not mention what to do for the following transactions once it's locked
             // Here I choose to simply skip transaction and publish an error
@@ -56,7 +58,7 @@ impl PaymentService {
                 continue;
             }
 
-            // for tracking
+            // For tracking
             self.history.push(txn.clone());
 
             let tx = txn.tx();
@@ -92,7 +94,7 @@ impl PaymentService {
                         continue;
                     }
 
-                    // happy path
+                    // Happy path
                     let txn = TransactionInner {
                         client,
                         tx,
@@ -135,7 +137,7 @@ impl PaymentService {
                     // Happy path
                     asset.available -= amount;
                     asset.hold += amount;
-                    // update status because it's disputed
+                    // Update status because it's disputed
                     *st = DisputeStatus::Disputed;
                     debug!(?asset, "Dispute,");
                 }
@@ -151,7 +153,7 @@ impl PaymentService {
                 ) => {
                     asset.available += *amount;
                     asset.hold -= *amount;
-                    // update status because it's resolved and no loger disputed
+                    // Update status because it's resolved and no loger disputed
                     *st = DisputeStatus::Normal;
                     debug!(?asset, "Resolve,");
                 }
@@ -168,10 +170,10 @@ impl PaymentService {
                 ) => {
                     asset.total -= amount;
                     asset.hold -= amount;
-                    // instruction said it's locked when chargeback
+                    // Instruction said it's locked when chargeback
                     asset.is_locked = Some(*tx);
 
-                    // update status since it's charged back
+                    // Update status since it's charged back
                     *st = DisputeStatus::ChargeBacked;
                     debug!(?asset, "Chargeback, ");
                 }

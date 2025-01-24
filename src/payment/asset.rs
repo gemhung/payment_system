@@ -3,7 +3,7 @@ use super::engine::TransactionID;
 
 pub type AssetBook = std::collections::HashMap<ClientID, Asset>;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Asset {
     pub total: f64,
     pub available: f64,

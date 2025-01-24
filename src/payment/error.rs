@@ -23,7 +23,7 @@ pub enum PaymentError {
     CanNotDisputeWithdrawal(Transaction),
 
     #[error("Account is locked after tx = {1}, txn={0:?}")]
-    Locked(Transaction, TransactionID), //
+    Locked(Transaction, TransactionID),
 
     #[allow(dead_code)]
     #[error("Unknown error")]

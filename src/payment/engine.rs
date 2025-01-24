@@ -24,39 +24,36 @@ impl PaymentEngine {
         }
     }
 
-    // start the enginge with a number of services
+    // Start the enginge with a number of services
     pub fn start(
         &mut self,
         size: std::num::NonZeroUsize,
         dead_letter_queue: mpsc::UnboundedSender<PaymentError>,
     ) {
         let sz = size.get();
-        let mut wait_group = vec![];
-        wait_group.reserve(sz);
+        let mut wait_group = Vec::with_capacity(sz);
         self.endpoint.reserve(sz);
         // Start services
         for _ in 0..sz {
             let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
             let dead_que = dead_letter_queue.clone();
-            // spawn service and add handle to wait group
-            wait_group.push(tokio::spawn(async move {
-                PaymentService::new().run(rx, dead_que).await
-            }));
-            // update endpoint for later dispatch
+            // Spawn service and add handle to wait group
+            wait_group.push(tokio::spawn(PaymentService::new().run(rx, dead_que)));
+            // Update endpoint for later dispatch
             self.endpoint.push(tx);
         }
 
         // Handle returned summary when services ended
         self.shutdown = Some(tokio::spawn(async move {
-            // wait until all services ended
+            // Wait until all services ended
             let write_csv_header = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
             futures::stream::iter(wait_group)
                 .for_each_concurrent(None, |w| {
                     let write_csv_header = write_csv_header.clone();
                     async move {
-                        // when service ended, we have the summary
+                        // When service ended, we have the summary
                         let summary = w.await;
-                        // csv header
+                        // Csv header
                         if write_csv_header.swap(false, std::sync::atomic::Ordering::SeqCst) {
                             println!("client,available,held,total,locked");
                         }
@@ -93,7 +90,7 @@ impl PaymentEngine {
             panic!("Engine not started yet");
         }
 
-        // simple dispatcher using hashing
+        // Simple dispatcher using hashing
         self.endpoint[txn.client_id() as usize % self.endpoint.len()].send(txn)?;
 
         Ok(())
@@ -101,9 +98,9 @@ impl PaymentEngine {
 
     pub async fn shutdown(self) -> Result<(), anyhow::Error> {
         if let Some(shutdown) = self.shutdown {
-            // close each service by dropping corresponding endpoint
+            // Close each service by dropping corresponding endpoint
             drop(self.endpoint);
-            // wait for all services to exit
+            // Wait for all services to exit
             shutdown.await?;
         }
 
@@ -145,6 +142,7 @@ impl Transaction {
 #[derive(Debug, Clone)]
 pub struct PaymentSummary {
     pub asset_book: AssetBook,
+    #[allow(dead_code)]
     pub history: Vec<Transaction>,
 }
 
