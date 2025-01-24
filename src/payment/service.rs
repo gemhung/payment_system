@@ -1,4 +1,3 @@
-use super::asset::Asset;
 use super::asset::AssetBook;
 use super::engine::Amount;
 use super::engine::ClientID;
@@ -48,7 +47,7 @@ impl PaymentService {
         while let Some(txn) = receiver.recv().await {
             // make new asset for new client
             let client_id = txn.client_id();
-            let mut asset = asset_book.entry(txn.client_id()).or_insert_with(Asset::new);
+            let asset = asset_book.entry(txn.client_id()).or_default();
 
             // The instruction seemed not mention what to do for the following transactions once it's locked
             // Here I choose to simply skip transaction and publish an error

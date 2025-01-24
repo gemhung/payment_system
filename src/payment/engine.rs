@@ -30,7 +30,7 @@ impl PaymentEngine {
         size: std::num::NonZeroUsize,
         dead_letter_queue: mpsc::UnboundedSender<PaymentError>,
     ) {
-        let sz = size.get() as usize;
+        let sz = size.get();
         let mut wait_group = vec![];
         wait_group.reserve(sz);
         self.endpoint.reserve(sz);
@@ -87,7 +87,7 @@ impl PaymentEngine {
         }));
     }
 
-    pub fn execute(&mut self, txn: Transaction) -> Result<(), anyhow::Error> {
+    pub fn execute(&self, txn: Transaction) -> Result<(), anyhow::Error> {
         // Engine should start before execute any transaction
         if self.shutdown.is_none() {
             panic!("Engine not started yet");

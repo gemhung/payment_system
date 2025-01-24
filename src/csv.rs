@@ -35,9 +35,8 @@ impl<T: std::io::Read> Iterator for IntoIter<T> {
                 row.trim();
                 // Convert csv line into transcation
                 match (
-                    row.get(0).map(|inner| {
+                    row.get(0).inspect(|inner| {
                         inner.to_string().make_ascii_lowercase();
-                        inner
                     }),
                     row.get(1).map(|inner| inner.parse()),
                     row.get(2).map(|inner| inner.parse()),
