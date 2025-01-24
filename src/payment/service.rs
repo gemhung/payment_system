@@ -10,7 +10,7 @@ use tracing::*;
 
 #[derive(Default)]
 pub(crate) struct PaymentService {
-    running: std::collections::HashMap<(ClientID, TransactionID), TransactionInner>,
+    clients_book: std::collections::HashMap<(ClientID, TransactionID), TransactionInner>,
     pub history: Vec<Transaction>,
 }
 
@@ -62,7 +62,7 @@ impl PaymentService {
             self.history.push(txn.clone());
 
             let tx = txn.tx();
-            match (txn, self.running.get_mut(&(client_id, tx))) {
+            match (txn, self.clients_book.get_mut(&(client_id, tx))) {
                 // Case 1. Deposit
                 (Transaction::Deposit(client, tx, amount), None) => {
                     let txn = TransactionInner {
@@ -72,7 +72,7 @@ impl PaymentService {
                         status: DisputeStatus::Normal,
                     };
 
-                    self.running.insert((client_id, tx), txn);
+                    self.clients_book.insert((client_id, tx), txn);
 
                     asset.total += amount;
                     asset.available += amount;
@@ -82,7 +82,6 @@ impl PaymentService {
                 (txn @ Transaction::Deposit(..), Some(_)) => {
                     let _ = dead_letter_queue.send(PaymentError::DuplicateTransaction(txn));
                 }
-
                 // Case 3. Withdraw
                 (Transaction::Withdrawal(client, tx, amount), None) => {
                     // check if insuffiecient balance
@@ -102,18 +101,16 @@ impl PaymentService {
                         status: DisputeStatus::Normal,
                     };
 
-                    self.running.insert((client_id, tx), txn);
+                    self.clients_book.insert((client_id, tx), txn);
 
                     asset.total -= amount;
                     asset.available -= amount;
                     debug!(?asset, "Withdrawal, ");
                 }
-
                 // Case 4. Error for withdrawal if found duplicated transaction id
                 (txn @ Transaction::Withdrawal(..), Some(_)) => {
                     let _ = dead_letter_queue.send(PaymentError::DuplicateTransaction(txn));
                 }
-
                 // Case 5. Dispute from normal status
                 (
                     txn @ Transaction::Dispute { .. },
@@ -141,7 +138,6 @@ impl PaymentService {
                     *st = DisputeStatus::Disputed;
                     debug!(?asset, "Dispute,");
                 }
-
                 // Case 6. Resolve from disputed status
                 (
                     Transaction::Resolve { .. },
@@ -157,7 +153,6 @@ impl PaymentService {
                     *st = DisputeStatus::Normal;
                     debug!(?asset, "Resolve,");
                 }
-
                 // Case 7. Chargeback from disputed status
                 (
                     Transaction::ChargeBack { .. },
@@ -177,10 +172,9 @@ impl PaymentService {
                     *st = DisputeStatus::ChargeBacked;
                     debug!(?asset, "Chargeback, ");
                 }
-
                 // Case 8.
-                // * Error for Resolving | ChargeBacking if any but disputed status
-                // * Error for Disputing any but normal status
+                // * Error when resolving or chargeBacking any status but disputed status
+                // * Error when disputing any status but normal status
                 (
                     txn @ (Transaction::Dispute { .. }
                     | Transaction::ChargeBack { .. }
@@ -190,7 +184,6 @@ impl PaymentService {
                     let _ =
                         dead_letter_queue.send(PaymentError::InvalidDisputeStatus(txn, *status));
                 }
-
                 // Case 8. Error for no such tx
                 (txn, None) => {
                     let _ = dead_letter_queue.send(PaymentError::NoSuchTransactionID(txn));
