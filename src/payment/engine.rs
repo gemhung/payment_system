@@ -134,5 +134,3 @@ pub struct PaymentSummary {
     #[allow(dead_code)]
     pub history: Vec<Transaction>,
 }
-
-mod test {}

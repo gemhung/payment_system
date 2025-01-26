@@ -231,7 +231,7 @@ async fn dispute_a_disputed_txn() -> Result<(), anyhow::Error> {
             panic!("Shouldn't receive end of stream before payment error");
         }
 
-        if !matches!(r, Some(PaymentError::InvalidDisputeStatus { .. })) {
+        if !matches!(r, Some(PaymentError::InvalidTransactionStatus { .. })) {
             panic!("Expect `InvalidDisputeStatus` error but get err = {:?}", r);
         }
     });

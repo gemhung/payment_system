@@ -172,16 +172,12 @@ impl PaymentService {
                     tracing::debug!(?asset, "Chargeback, ");
                 }
                 // Case 8.
-                // * Error when resolving or chargeBacking any status but disputed status
-                // * Error when disputing any status but normal status
-                (
-                    txn @ (Transaction::Dispute { .. }
-                    | Transaction::ChargeBack { .. }
-                    | Transaction::Resolve { .. }),
-                    Some(TransactionInner { status, .. }),
-                ) => {
-                    let _ =
-                        dead_letter_queue.send(PaymentError::InvalidDisputeStatus(txn, *status));
+                // * Invalid new transaction and our tracking transaction. Ex: Dispute v.s Dispute or Dispute v.s Chargeback .. etc
+                (any_other_txn, Some(TransactionInner { status, .. })) => {
+                    let _ = dead_letter_queue.send(PaymentError::InvalidTransactionStatus(
+                        any_other_txn,
+                        *status,
+                    ));
                 }
                 // Case 8. Error for no such tx
                 (txn, None) => {

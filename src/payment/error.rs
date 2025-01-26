@@ -17,7 +17,7 @@ pub enum PaymentError {
     NoSuchTransactionID(Transaction),
 
     #[error("Invalid disputed status, txn = {0:?}, current status = {1:?}")]
-    InvalidDisputeStatus(Transaction, DisputeStatus),
+    InvalidTransactionStatus(Transaction, DisputeStatus),
 
     #[error("Cannot dispute withdrawal transaction, txn ={0:?} ")]
     CanNotDisputeWithdrawal(Transaction),
