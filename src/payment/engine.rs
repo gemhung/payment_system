@@ -29,10 +29,14 @@ impl PaymentEngine {
         size: std::num::NonZeroUsize,
         dead_letter_queue: mpsc::UnboundedSender<PaymentError>,
     ) {
+        // Starting engine again is a safe ops
+        if self.shutdown.is_some() {
+            return;
+        }
         let sz = size.get();
         let mut wait_group = Vec::with_capacity(sz);
         self.endpoint.reserve(sz);
-        // Start services
+        // Start services one by one
         for _ in 0..sz {
             let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
             let dead_que = dead_letter_queue.clone();
@@ -41,7 +45,6 @@ impl PaymentEngine {
             // Update endpoint for later dispatch
             self.endpoint.push(tx);
         }
-
         // Handle returned summary when services ended
         self.shutdown = Some(tokio::spawn(async move {
             // Wait until all services ended
@@ -74,9 +77,8 @@ impl PaymentEngine {
     pub fn execute(&self, txn: Transaction) -> Result<(), anyhow::Error> {
         // Engine should start before execute any transaction
         if self.shutdown.is_none() {
-            panic!("Engine not started yet");
+            return Err(anyhow::Error::msg("Engine not started yet"));
         }
-
         // Simple dispatcher using hashing
         self.endpoint[txn.client_id() as usize % self.endpoint.len()].send(txn)?;
 
