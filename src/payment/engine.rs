@@ -57,23 +57,11 @@ impl PaymentEngine {
                         if write_csv_header.swap(false, std::sync::atomic::Ordering::SeqCst) {
                             println!("client,available,held,total,locked");
                         }
-
                         // Process and then print client's asset
                         match summary {
                             Ok(Ok(PaymentSummary { asset_book, .. })) => {
-                                asset_book.into_iter().for_each(|(client_id, asset)| {
-                                    // As intructions required, we output a precision of up to four places past the decimal
-                                    let total = format!("{:.4}", asset.total);
-                                    let available = format!("{:.4}", asset.available);
-                                    let hold = format!("{:.4}", asset.hold);
-                                    let locked = asset.is_locked.is_some();
-                                    println!(
-                                        "{},{},{},{},{}",
-                                        client_id, available, hold, total, locked
-                                    );
-                                })
+                                asset_book.print_to_stdout();
                             }
-
                             err => {
                                 error!(?err);
                             }
