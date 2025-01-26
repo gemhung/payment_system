@@ -3,7 +3,6 @@ use super::error::PaymentError;
 use super::service::PaymentService;
 use futures::StreamExt;
 use tokio::sync::mpsc;
-use tracing::*;
 
 pub type TransactionID = u32;
 pub type ClientID = u16;
@@ -63,7 +62,7 @@ impl PaymentEngine {
                                 asset_book.print_to_stdout();
                             }
                             err => {
-                                error!(?err);
+                                tracing::error!(?err);
                             }
                         };
                     }

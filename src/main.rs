@@ -2,7 +2,6 @@ mod csv;
 mod payment;
 
 use payment::engine::PaymentEngine;
-use tracing::*;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -32,7 +31,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let dead_letter_wait = tokio::spawn(async move {
         while let Some(err) = dead_letter_rx.recv().await {
             // For now , we simply print out error cause the instruction seems not to mention how to deal with error
-            error!(?err);
+            tracing::error!(?err);
         }
     });
 
@@ -40,10 +39,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut engine = PaymentEngine::new();
     // Payment services number is same as available_parallelism
     let sz = std::thread::available_parallelism().unwrap_or_else(|err| {
-        error!(?err);
+        tracing::error!(?err);
         std::num::NonZeroUsize::new(10).expect("should be positive number")
     });
-    debug!(?sz);
+    tracing::debug!(?sz);
     // Start engine to run multiple identical payment services concurrently
     engine.start(sz, dead_letter_tx);
 
@@ -56,12 +55,12 @@ async fn main() -> Result<(), anyhow::Error> {
             }
             // CSV parsing error
             Some(Err(err)) => {
-                error!(?err);
+                tracing::error!(?err);
             }
             // Happy path
             Some(Ok(transaction)) => {
                 if let Err(err) = engine.execute(transaction) {
-                    error!(?err);
+                    tracing::error!(?err);
                 }
             }
         }

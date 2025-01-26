@@ -6,7 +6,6 @@ use super::engine::Transaction;
 use super::engine::TransactionID;
 use super::error::PaymentError;
 use tokio::sync::mpsc;
-use tracing::*;
 
 #[derive(Default)]
 pub(crate) struct PaymentService {
@@ -76,7 +75,7 @@ impl PaymentService {
 
                     asset.total += amount;
                     asset.available += amount;
-                    debug!(?asset, "Deposit,");
+                    tracing::debug!(?asset, "Deposit,");
                 }
                 // Case 2. Error for deposit if found duplicate transaction id
                 (txn @ Transaction::Deposit(..), Some(_)) => {
@@ -105,7 +104,7 @@ impl PaymentService {
 
                     asset.total -= amount;
                     asset.available -= amount;
-                    debug!(?asset, "Withdrawal, ");
+                    tracing::debug!(?asset, "Withdrawal, ");
                 }
                 // Case 4. Error for withdrawal if found duplicated transaction id
                 (txn @ Transaction::Withdrawal(..), Some(_)) => {
@@ -136,7 +135,7 @@ impl PaymentService {
                     asset.hold += amount;
                     // Update status because it's disputed
                     *st = DisputeStatus::Disputed;
-                    debug!(?asset, "Dispute,");
+                    tracing::debug!(?asset, "Dispute,");
                 }
                 // Case 6. Resolve from disputed status
                 (
@@ -151,7 +150,7 @@ impl PaymentService {
                     asset.hold -= *amount;
                     // Update status because it's resolved and no loger disputed
                     *st = DisputeStatus::Normal;
-                    debug!(?asset, "Resolve,");
+                    tracing::debug!(?asset, "Resolve,");
                 }
                 // Case 7. Chargeback from disputed status
                 (
@@ -170,7 +169,7 @@ impl PaymentService {
 
                     // Update status since it's charged back
                     *st = DisputeStatus::ChargeBacked;
-                    debug!(?asset, "Chargeback, ");
+                    tracing::debug!(?asset, "Chargeback, ");
                 }
                 // Case 8.
                 // * Error when resolving or chargeBacking any status but disputed status
