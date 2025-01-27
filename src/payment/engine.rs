@@ -1,7 +1,6 @@
 use super::asset::AssetBook;
 use super::error::PaymentError;
 use super::service::PaymentService;
-use futures::StreamExt;
 use tokio::sync::mpsc;
 
 pub type TransactionID = u32;
@@ -34,14 +33,15 @@ impl PaymentEngine {
             return;
         }
         let sz = size.get();
-        let mut wait_group = Vec::with_capacity(sz);
+
         self.endpoint.reserve(sz);
         // Start services one by one
+        let mut join_set = tokio::task::JoinSet::new();
         for _ in 0..sz {
             let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
             let dead_que = dead_letter_queue.clone();
             // Spawn service and add handle to wait group
-            wait_group.push(tokio::spawn(PaymentService::new().run(rx, dead_que)));
+            join_set.spawn(PaymentService::new().run(rx, dead_que));
             // Update endpoint for later dispatch
             self.endpoint.push(tx);
         }
@@ -49,28 +49,20 @@ impl PaymentEngine {
         self.shutdown = Some(tokio::spawn(async move {
             // Wait until all services ended
             let write_csv_header = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-            futures::stream::iter(wait_group)
-                .for_each_concurrent(None, |w| {
-                    let write_csv_header = write_csv_header.clone();
-                    async move {
-                        // When service ended, we have the summary
-                        let summary = w.await;
+            while let Some(res) = join_set.join_next().await {
+                match res {
+                    Ok(Ok(PaymentSummary { asset_book, .. })) => {
                         // Csv header
                         if write_csv_header.swap(false, std::sync::atomic::Ordering::SeqCst) {
                             println!("client,available,held,total,locked");
                         }
-                        // Process and then print client's asset
-                        match summary {
-                            Ok(Ok(PaymentSummary { asset_book, .. })) => {
-                                asset_book.print_to_stdout();
-                            }
-                            err => {
-                                tracing::error!(?err);
-                            }
-                        };
+                        asset_book.print_to_stdout();
                     }
-                })
-                .await;
+                    err => {
+                        tracing::error!(?err);
+                    }
+                }
+            }
         }));
     }
 

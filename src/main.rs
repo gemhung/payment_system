@@ -43,7 +43,7 @@ async fn main() -> Result<(), anyhow::Error> {
         std::num::NonZeroUsize::new(10).expect("should be positive number")
     });
     tracing::debug!(?sz);
-    // Start engine to run multiple identical payment services concurrently
+    // Non-blocking. Start engine to run multiple identical payment services concurrently
     engine.start(sz, dead_letter_tx);
 
     // Feed all transactions to engine
