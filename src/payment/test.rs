@@ -23,6 +23,48 @@ async fn start_shutdown_engine() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
+async fn duplicate_start_engine() -> Result<(), anyhow::Error> {
+    let mut engine = PaymentEngine::new();
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    engine.start(std::num::NonZeroUsize::new(10).unwrap(), tx.clone());
+    engine.start(std::num::NonZeroUsize::new(10).unwrap(), tx);
+
+    drop(rx);
+    engine.shutdown().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn shutdown_without_start() -> Result<(), anyhow::Error> {
+    let engine = PaymentEngine::new();
+    engine.shutdown().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn execute_without_start() -> Result<(), anyhow::Error> {
+    let engine = PaymentEngine::new();
+
+    match engine.execute(Transaction::Deposit(1, 1, 3.0)) {
+        Err(err) => {
+            let found = err.to_string().find("Engine not started yet");
+            if found.is_none() {
+                panic!("Can't find expected erorr string")
+            }
+        }
+        Ok(_) => {
+            panic!("Suppose to return error")
+        }
+    }
+
+    engine.shutdown().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn deposit() -> Result<(), anyhow::Error> {
     let mut engine = PaymentEngine::new();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
